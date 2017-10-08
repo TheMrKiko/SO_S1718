@@ -14,7 +14,6 @@
 #include <pthread.h>
 #include <ctype.h>
 
-
 #include "mplib3.h"
 
 /*--------------------------------------------------------------------
@@ -128,5 +127,8 @@ int main (int argc, char** argv) {
       return -1;
     }
   }
+  free(slave_args);
+  free(slaves);
+  libertarMPlib();
   return 0;
 }

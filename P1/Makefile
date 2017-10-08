@@ -4,20 +4,19 @@
 CFLAGS= -g -Wall -pedantic
 CC=gcc
 
-heatSim: main.c matrix2d.c
-	$(CC) $(CFLAGS) -o heatSim main.c matrix2d.c
+all: heatSim
 
-main.o: main.c matrix2d.h
-	$(CC) $(CFLAGS) -c main.c
-
-matrix2d.o: matrix2d.c matrix2d.h
-	$(CC) $(CFLAGS) -c matrix2d.c
+heatSim: main.c matrix2d.c mplib3.c leQueue.c matrix2d.h mplib3.h leQueue.h
+	$(CC) $(CFLAGS) -lpthread -o heatSim main.c matrix2d.c mplib3.c leQueue.c
 
 clean:
-	rm -f *.o heatSim
+	rm -f heatSim
 
 zip:
 	zip heatSim_ex01_solucao.zip main.c matrix2d.c matrix2d.h Makefile
 
 run:
 	./heatSim 5 10.0 10.0 0.0 0.0 10 5 2
+
+leak:	heatSim
+	valgrind --tool=memcheck --leak-check=yes ./heatSim 5 10.0 10.0 0.0 0.0 10 5 2

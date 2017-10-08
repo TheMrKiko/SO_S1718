@@ -62,7 +62,7 @@ void *slaveThread(void *a) {
 
    for (j=0; j<arg->n; j++) {
      printf ("task=%d vai enviar %s para task 0\n", myid, send_buff);
-     enviarMensagem (myid, 0, send_buff, strlen(send_buff));
+     enviarMensagem (myid, 0, send_buff, strlen(send_buff)+1);
      receberMensagem (0, myid, receive_buff, BUFFSZ);
      printf ("task=%d recebeu %s da task 0\n", myid, receive_buff);
    }
@@ -117,7 +117,7 @@ int main (int argc, char** argv) {
     for (j=0; j<numTarefas; j++) {
       receberMensagem (i+1, 0, buff, BUFFSZ);
       strupr (buff);
-      enviarMensagem (0, i+1, buff, strlen(buff));
+      enviarMensagem (0, i+1, buff, strlen(buff)+1);
     }
   }
 

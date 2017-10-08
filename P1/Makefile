@@ -1,12 +1,11 @@
 # Makefile
 # Sistemas Operativos, DEI/IST/ULisboa 2017-18
 
-CFLAGS= -g -Wall
-CFLAGS2= -g -Wall -pedantic
+CFLAGS= -g -Wall -pedantic
 CC=gcc
 
-heatSim: main.o matrix2d.o
-	$(CC) $(CFLAGS) -o heatSim main.o matrix2d.o
+heatSim: main.c matrix2d.c
+	$(CC) $(CFLAGS) -o heatSim main.c matrix2d.c
 
 main.o: main.c matrix2d.h
 	$(CC) $(CFLAGS) -c main.c

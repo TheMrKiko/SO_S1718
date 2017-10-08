@@ -34,7 +34,7 @@ DoubleMatrix2D* simul(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int li
 		other = aux;
 	};
 	return act_matrix;
-};
+}
 
 /*--------------------------------------------------------------------
 | Function: parse_integer_or_exit

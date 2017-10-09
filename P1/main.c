@@ -23,22 +23,21 @@ typedef struct {
 	int id;
 	int colunas;
 	int klinhas;
+	int iter;
 } args_t;
 
 /*--------------------------------------------------------------------
-| Function: simul
+| Function: simulFatia
 ---------------------------------------------------------------------*/
 
-DoubleMatrix2D* simul(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas, int numIteracoes) {
+DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas) {
 	DoubleMatrix2D* act_matrix = matrix,* other = matrix_aux,* aux;
 	double value;
-	int l, c, i;
+	int l, c;
 
 	if (linhas < 2 || colunas < 2) {
 		return NULL;
 	}
-
-	for (i = 0; i < numIteracoes; i++) {
 
 		for (l = 1; l < linhas-1; l++) {
 			for (c = 1; c < colunas-1; c++) {
@@ -49,7 +48,7 @@ DoubleMatrix2D* simul(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int li
 		aux = other;
 		other = act_matrix;
 		act_matrix = aux;
-	}
+
 	return act_matrix;
 }
 
@@ -86,13 +85,14 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a){
-	int i, myid, n, klinhas;
+	int i, iteracoes, myid, n, klinhas;
 	DoubleMatrix2D* matrix,* matrix_aux;
 	args_t* args = (args_t*) a;
 
 	myid = args->id;
 	n = args->colunas;
 	klinhas = args->klinhas;
+	iteracoes = args->iter;
 
 	double* rec_buffer = (double*) malloc(sizeof(double)*(n+2));
 	double* env_buffer = (double*) malloc(sizeof(double)*(n+2));
@@ -117,7 +117,15 @@ void* slaveWork(void* a){
 	/*Repetir na auxiliar*/
 	dm2dCopy(matrix_aux, matrix);
 
-
+	for (i=0; i < iteracoes; i++) {
+		/*if(myid>1) {
+		receberMensagem(myid,myid-1,rec_buffer,sizeof(int));
+		}
+		trabalhar
+		env_buffer[0]=1;
+		enviarMensagem(my,myid+1,env_buffer,sizeof(int));
+		*/
+	};
 
 	/*Calcular valores*/
 	//result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
@@ -184,6 +192,7 @@ int main (int argc, char** argv) {
 		slave_args[i].id = i+1;
 	    slave_args[i].colunas = N;
 		slave_args[i].klinhas = nlinhas;
+		slave_args[i].iter = iteracoes;
 	    pthread_create(&slaves[i], NULL, slaveWork, &slave_args[i]);
 	}
 

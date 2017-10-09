@@ -23,8 +23,6 @@ typedef struct {
 	int id;
 	int colunas;
 	int klinhas;
-	DoubleMatrix2D* matrix_t;
-	DoubleMatrix2D* aux_t;
 } args_t;
 
 /*--------------------------------------------------------------------
@@ -89,21 +87,49 @@ double parse_double_or_exit(char const *str, char const *name) {
 
 void* slaveWork(void* a){
 	int i, myid, n, klinhas;
-	DoubleMatrix2D* matrix,* aux;
+	DoubleMatrix2D* matrix,* matrix_aux;
 	args_t* args = (args_t*) a;
 
 	myid = args->id;
 	n = args->colunas;
 	klinhas = args->klinhas;
-	matrix = args->matrix_t;
-	aux = args->aux_t;
 
-	/*se for a thread 1
-		recebe duas
-		receberMensagem(0,1,linha)
-		receberMensagem(0,1, 2 colunas)
-*/
+	double* rec_buffer = (double*) malloc(sizeof(double)*(n+2));
+	double* env_buffer = (double*) malloc(sizeof(double)*(n+2));
 
+	/*Inicializar matriz*/
+	matrix = dm2dNew(klinhas+2, n+2);
+	matrix_aux = dm2dNew(klinhas+2, n+2);
+
+	/*Receber temperaturas iniciais*/
+	receberMensagem(0, myid, rec_buffer, sizeof(double)*4);
+
+	/*Inicializar matriz com argumentos*/
+	dm2dSetColumnTo(matrix, 0, rec_buffer[0]);
+	dm2dSetColumnTo(matrix, n+1, rec_buffer[2]);
+
+	if (myid==1) {
+		dm2dSetLineTo(matrix, 0, rec_buffer[1]);
+	} else if (myid == n/klinhas) {
+		dm2dSetLineTo(matrix, klinhas+1, rec_buffer[3]);
+	}
+
+	/*Repetir na auxiliar*/
+	dm2dCopy(matrix_aux, matrix);
+
+
+
+	/*Calcular valores*/
+	//result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
+	//if (result == NULL) {
+    	//printf("\nErro na simulacao.\n\n");
+    	//return -1;
+	//}
+
+	dm2dFree(matrix);
+	dm2dFree(matrix_aux);
+	free(rec_buffer);
+	free(env_buffer);
 	return 0;
 }
 
@@ -134,32 +160,17 @@ int main (int argc, char** argv) {
 	int trab = parse_integer_or_exit(argv[7], "trabalhadoras");
 	int csz = parse_integer_or_exit(argv[8], "mensagens_por_canal");
 
-
 	/*Verificar argumentos*/
 	if (N<1 || tEsq<0 || tSup<0 || tDir<0 || tInf<0 || iteracoes<1 || trab<1 || N%trab != 0 || csz<0) {
 		exit(1);
 	}
-
 	fprintf(stderr, "\nArgumentos:\nN=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d mensagens_por_canal=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, csz);
-
-
-	/*Inicializar matriz*/
-	//matrix = dm2dNew(N+2, N+2);
-	//matrix_aux = dm2dNew(N+2, N+2);
-
-	/*Inicializar matriz com argumentos*/
-	//dm2dSetLineTo(matrix, 0, tSup);
-	//dm2dSetLineTo(matrix, N+1, tInf);
-	//dm2dSetColumnTo(matrix, 0, tEsq);
-	//dm2dSetColumnTo(matrix, N+1, tDir);
-
-	/*Repetir na auxiliar*/
-	//dm2dCopy(matrix_aux, matrix);
-
-
 
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
     slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
+
+	double* buffer = (double*) malloc(sizeof(double)*(N+2));
+	double temps[] = {tEsq, tSup, tDir, tInf};
 
 	/*Criar Threads*/
 	if (inicializarMPlib(1, trab+1) == -1) {
@@ -167,50 +178,35 @@ int main (int argc, char** argv) {
 		return 1;
 	}
 
-	/* Criar slaves*/
+	/*Criar slaves*/
 	nlinhas = N/trab;
 	for (i=0; i<trab; i++) {
 		slave_args[i].id = i+1;
 	    slave_args[i].colunas = N;
 		slave_args[i].klinhas = nlinhas;
-		slave_args[i].matrix_t = dm2dNew(nlinhas+2, N+2);
-		slave_args[i].aux_t = dm2dNew(nlinhas+2, N+2);
 	    pthread_create(&slaves[i], NULL, slaveWork, &slave_args[i]);
 	}
 
+	/*Enviar temperaturas iniciais*/
 	for (i=1; i<trab+1; i++) {
-		/*se for a primeira
-			envia as colunas e a tempsup
-			enviarMensagem(0,1,linhasuperior)
-			enviarMensagem(0,1,uma matriz)
-		se for as outra
-			so as colunas
-			[tesq][tdir]
-		se for a ultima
-			as colunas
-			[]8][][]
-
-		enviarMensagem(0,i,matrix, colunasxlinhas?)
-		*/
+		enviarMensagem(0, i, temps, sizeof(double)*4);
 	}
-	/*
-	thread0->
-	thread_create(t1, nulll, slaveWork, (void*)args)*/
 
-	/*Calcular valores*/
-	//result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
-	//if (result == NULL) {
-    	//printf("\nErro na simulacao.\n\n");
-    	//return -1;
-	//}
+
+	for (i=1; i<trab+1; i++) {
+
+	}
+
+
+
 
 	/*Imprimir e terminar*/
 	//dm2dPrint(result);
+
 	for (i = 0; i < trab; i++) {
 		pthread_join(slaves[i], NULL);
-    	dm2dFree(slave_args[i].matrix_t);
-		dm2dFree(slave_args[i].aux_t);
   	}
+	free(buffer);
 	free(slave_args);
 	free(slaves);
 	libertarMPlib();

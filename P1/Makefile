@@ -1,8 +1,8 @@
 # Makefile
 # Sistemas Operativos, DEI/IST/ULisboa 2017-18
 
-CFLAGS2= -g -Wall -pedantic
-CFLAGS= -g -Wall
+CFLAGS= -g -Wall -pedantic
+CFLAGS2= -g 
 CC=gcc
 
 all: heatSim
@@ -19,8 +19,8 @@ zip:
 run:    heatSim
 	./heatSim 5 10.0 10.0 0.0 0.0 10 5 2
 	
-run1:
-	./heatSim 5 10.0 10.0 0.0 0.0 10 1 2
+run1:	heatSim
+	./heatSim 5 10.0 8.0 6.0 4.0 10 5 2
 
 leak:	heatSim
 	valgrind --tool=memcheck --leak-check=yes ./heatSim 5 10.0 10.0 0.0 0.0 10 5 2

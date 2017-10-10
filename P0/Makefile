@@ -10,5 +10,5 @@ heatSim: main.c matrix2d.c
 clean:
 	rm -f *.o heatSim
 
-run:
+run:	heatSim
 	./heatSim 5 10.0 10.0 0.0 0.0 10

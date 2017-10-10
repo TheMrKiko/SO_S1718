@@ -25,10 +25,11 @@ DoubleMatrix2D* simul(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int li
 			for (c = 1; c < colunas-1; c++) {
 				value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
 				dm2dSetEntry(other, l, c, value);
-				dm2dPrint(other);
+				
 			};
 
 		};
+        dm2dPrint(other);
 		aux = act_matrix;
 		act_matrix = other;
 		other = aux;
@@ -120,7 +121,7 @@ int main (int argc, char** argv) {
 
 	result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
 
-	dm2dPrint(result);
+	//dm2dPrint(result);
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);

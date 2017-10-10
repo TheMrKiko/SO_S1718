@@ -1,15 +1,12 @@
+// Sistemas Operativos, DEI/IST/ULisboa 2017-18
+// Projeto SO - exercicio 1, version 03
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~ Joao Daniel Silva 86445 ~ Francisco do Canto Sousa 86416 ~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-
-// Sistemas Operativos, DEI/IST/ULisboa 2017-18
-// Projeto SO - exercicio 1, version 03
-
-/*meter todos os aux para matrix aux, ver argumentos redundantes,
-//gerir nomes de variaveis, meter mais funcoes*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -30,9 +27,9 @@ typedef struct {
 ---------------------------------------------------------------------*/
 
 DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas) {
-	DoubleMatrix2D* act_matrix = matrix,* other = matrix_aux,* aux;
-	double value;
 	int l, c;
+	double value;
+	DoubleMatrix2D* act_matrix = matrix,* oth_matrix = matrix_aux;
 
 	if (linhas < 2 || colunas < 2) {
 		return NULL;
@@ -41,24 +38,18 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 	for (l = 1; l < linhas-1; l++) {
 		for (c = 1; c < colunas-1; c++) {
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
-			dm2dSetEntry(other, l, c, value);
+			dm2dSetEntry(oth_matrix, l, c, value);
 		}
 	}
-	/*aux = other;
-	other = act_matrix;
-	act_matrix = aux;*/
-
-	return other;
+	return oth_matrix;
 }
 
 /*--------------------------------------------------------------------
 | Function: parse_integer_or_exit
 ---------------------------------------------------------------------*/
 
-int parse_integer_or_exit(char const *str, char const *name)
-{
+int parse_integer_or_exit(char const *str, char const *name) {
 	int value;
-
 	if (sscanf(str, "%d", &value) != 1 || value < 1) {
 		fprintf(stderr, "\nErro no argumento \"%s\".\n\n", name);
 		exit(1);
@@ -83,23 +74,29 @@ double parse_double_or_exit(char const *str, char const *name) {
 | Function: franciscoWork
 --------------------------------------------------------------------*/
 
-void* slaveWork(void* a){
+void* slaveWork(void* a) {
 	int i, iteracoes, myid, n, klinhas;
-	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,* aux;
+	double* rec_buffer,* env_buffer;
+	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res;
 	args_t* args = (args_t*) a;
-	double* rec_buffer;
-	double* env_buffer;
 
+	/*Guardar argumentos*/
 	myid = args->id;
 	n = args->colunas;
 	klinhas = args->klinhas;
 	iteracoes = args->iter;
 
-	rec_buffer = (double*) malloc(sizeof(double)*(n+2));
-
 	/*Inicializar matrix*/
 	matrix = dm2dNew(klinhas+2, n+2);
 	matrix_aux = dm2dNew(klinhas+2, n+2);
+
+	if (matrix == NULL || matrix_aux == NULL) {
+		fprintf(stderr, "\nErro: Nao foi possivel alocar memoria para as matrizes.\n\n");
+		exit(-1);
+ 	}
+
+	/*Alocar buffer*/
+	rec_buffer = (double*) malloc(sizeof(double)*(n+2));
 
 	/*Receber temperaturas iniciais*/
 	receberMensagem(0, myid, rec_buffer, sizeof(double)*4);
@@ -119,7 +116,11 @@ void* slaveWork(void* a){
 
 	for (i = 0; i < iteracoes; i++) {
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas+2, n+2);
-		if (myid%2) {
+		if (matrix_res == NULL) {
+			printf("\nErro na simulacao.\n\n");
+			exit(-1);
+ 		}
+		if (myid % 2) {
 			if (myid != 1) { //Enviam linha de cima
 				env_buffer = dm2dGetLine(matrix_aux, 1);
 				enviarMensagem(myid, myid-1, env_buffer, sizeof(double)*(n+2));
@@ -132,8 +133,7 @@ void* slaveWork(void* a){
 				receberMensagem(myid+1, myid, rec_buffer, sizeof(double)*(n+2));
 				dm2dSetLine(matrix_aux, klinhas+1, rec_buffer);
 			}
-		}
-		else {
+		} else {
 			if (myid != 1) {
 				env_buffer = dm2dGetLine(matrix_aux, 1);
 				receberMensagem(myid-1, myid, rec_buffer, sizeof(double)*(n+2));
@@ -169,10 +169,9 @@ void* slaveWork(void* a){
 
 int main(int argc, char** argv) {
 	int i, nlinhas;
-	/*DoubleMatrix2D *matrix, *matrix_aux, *result;*/
 	double* buffer;
-	args_t* slave_args;
-	pthread_t* slaves;
+	args_t* slave_args; pthread_t* slaves;
+	/*DoubleMatrix2D *matrix, *matrix_aux, *result;*/
 
 	if (argc != 9) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
@@ -191,8 +190,10 @@ int main(int argc, char** argv) {
 	int csz = parse_integer_or_exit(argv[8], "mensagens_por_canal");
 
 	/*Verificar argumentos*/
-	if (N<1 || tEsq<0 || tSup<0 || tDir<0 || tInf<0 || iteracoes<1 || trab<1 || N%trab != 0 || csz<0) {
-		exit(1);
+	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || csz < 0) {
+		fprintf(stderr, "\nErro: Argumentos invalidos.\n");
+		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0 e iteracoes >= 1\n");
+		return 1;
 	}
 
 	fprintf(stderr, "\nArgumentos:\nN=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d mensagens_por_canal=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, csz);
@@ -205,13 +206,13 @@ int main(int argc, char** argv) {
 
 	/*Criar Threads*/
 	if (inicializarMPlib(1, trab+1) == -1) {
-		printf("Erro ao inicializar MPLib.\n");
-		return 1;
+		printf("Erro: Nao foi possivel inicializar o MPLib.\n");
+		return -1;
 	}
 
 	/*Criar slaves*/
 	nlinhas = N/trab;
-	for (i=0; i<trab; i++) {
+	for (i = 0; i < trab; i++) {
 		slave_args[i].id = i+1;
 	    slave_args[i].colunas = N;
 		slave_args[i].klinhas = nlinhas;
@@ -220,12 +221,12 @@ int main(int argc, char** argv) {
 	}
 
 	/*Enviar temperaturas iniciais*/
-	for (i=1; i<trab+1; i++) {
+	for (i = 1; i < trab+1; i++) {
 		enviarMensagem(0, i, buffer, sizeof(double)*4);
 	}
 
-
-	for (i=1; i<trab+1; i++) {
+	/*Receber temperaturas finais*/
+	for (i = 1; i < trab+1; i++) {
 
 	}
 
@@ -234,8 +235,12 @@ int main(int argc, char** argv) {
 	/*dm2dPrint(result);*/
 
 	for (i = 0; i < trab; i++) {
-		pthread_join(slaves[i], NULL);
+		if (pthread_join(slaves[i], NULL)){
+			fprintf(stderr, "\nErro: Um escravo falhou.\n");
+	        return -1;
+		}
   	}
+
 	free(buffer);
 	free(slave_args);
 	free(slaves);

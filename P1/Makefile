@@ -2,7 +2,6 @@
 # Sistemas Operativos, DEI/IST/ULisboa 2017-18
 
 CFLAGS= -g -Wall -pedantic
-CFLAGS2= -g 
 CC=gcc
 
 all: heatSim

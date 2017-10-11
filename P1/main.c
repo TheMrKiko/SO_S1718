@@ -1,5 +1,7 @@
-// Sistemas Operativos, DEI/IST/ULisboa 2017-18
-// Projeto SO - exercicio 1, version 03
+/*
+		Sistemas Operativos, DEI/IST/ULisboa 2017-18
+		Projeto SO - exercicio 1, version 03
+*/
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -50,7 +52,7 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 
 int parse_integer_or_exit(char const *str, char const *name) {
 	int value;
-	if (sscanf(str, "%d", &value) != 1 || value < 1) {
+	if (sscanf(str, "%d", &value) != 1) {
 		fprintf(stderr, "\nErro no argumento \"%s\".\n\n", name);
 		exit(1);
 	}
@@ -63,7 +65,7 @@ int parse_integer_or_exit(char const *str, char const *name) {
 
 double parse_double_or_exit(char const *str, char const *name) {
 	double value;
-	if (sscanf(str, "%lf", &value) != 1 || value < 0) {
+	if (sscanf(str, "%lf", &value) != 1) {
 		fprintf(stderr, "\nErro no argumento \"%s\".\n\n", name);
 		exit(1);
 	}
@@ -93,7 +95,7 @@ void* slaveWork(void* a) {
 	if (matrix == NULL || matrix_aux == NULL) {
 		fprintf(stderr, "\nErro: Nao foi possivel alocar memoria para as matrizes.\n\n");
 		exit(-1);
- 	}
+	}
 
 	/*Alocar buffer*/
 	rec_buffer = (double*) malloc(sizeof(double)*(n+2));
@@ -114,12 +116,13 @@ void* slaveWork(void* a) {
 	/*Repetir na auxiliar*/
 	dm2dCopy(matrix_aux, matrix);
 
+	/*Calcular valores*/
 	for (i = 0; i < iteracoes; i++) {
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas+2, n+2);
 		if (matrix_res == NULL) {
 			printf("\nErro na simulacao.\n\n");
 			exit(-1);
- 		}
+		}
 		if (myid % 2) {
 			if (myid != 1) { //Enviam linha de cima
 				env_buffer = dm2dGetLine(matrix_aux, 1);
@@ -150,12 +153,12 @@ void* slaveWork(void* a) {
 		matrix_aux = matrix;
 		matrix = matrix_res;
 	}
-	/*Calcular valores*/
-	/*result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
-	//if (result == NULL) {
-    	//printf("\nErro na simulacao.\n\n");
-    	//return -1;
-	}*/
+
+	for (i = 1; i < klinhas + 1; i++) {
+		env_buffer = dm2dGetLine(matrix,i);
+		enviarMensagem(myid, 0, env_buffer, sizeof(double)*(n+2));
+	}
+
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);
@@ -168,10 +171,10 @@ void* slaveWork(void* a) {
 ---------------------------------------------------------------------*/
 
 int main(int argc, char** argv) {
-	int i, nlinhas;
+	int i, j, nlinhas;
 	double* buffer;
 	args_t* slave_args; pthread_t* slaves;
-	/*DoubleMatrix2D *matrix, *matrix_aux, *result;*/
+	DoubleMatrix2D *result;
 
 	if (argc != 9) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
@@ -197,6 +200,10 @@ int main(int argc, char** argv) {
 	}
 
 	fprintf(stderr, "\nArgumentos:\nN=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d mensagens_por_canal=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, csz);
+
+	result = dm2dNew(N+2, N+2);
+	dm2dSetLineTo (result, 0, tSup);
+	dm2dSetLineTo (result, N+1, tInf);
 
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
     slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
@@ -226,21 +233,23 @@ int main(int argc, char** argv) {
 	}
 
 	/*Receber temperaturas finais*/
-	for (i = 1; i < trab+1; i++) {
-
+	for (i = 0; i < trab; i++) {
+		for (j = 1; j < nlinhas+1; j++) {
+			receberMensagem(i+1, 0, buffer, sizeof(double)*(N+2));
+			dm2dSetLine(result, nlinhas*i + j, buffer);
+		}
 	}
 
-
 	/*Imprimir e terminar*/
-	/*dm2dPrint(result);*/
-
+	dm2dPrint(result);
 	for (i = 0; i < trab; i++) {
 		if (pthread_join(slaves[i], NULL)){
 			fprintf(stderr, "\nErro: Um escravo falhou.\n");
 	        return -1;
 		}
-  	}
+	}
 
+	dm2dFree(result);
 	free(buffer);
 	free(slave_args);
 	free(slaves);

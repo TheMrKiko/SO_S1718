@@ -124,12 +124,14 @@ void* slaveWork(void* a) {
 			exit(-1);
 		}
 		if (myid % 2) {
-			if (myid != 1) { //Enviam linha de cima
+			/*envia linhas de cima*/
+			if (myid != 1) {
 				env_buffer = dm2dGetLine(matrix_aux, 1);
 				enviarMensagem(myid, myid-1, env_buffer, sizeof(double)*(n+2));
 				receberMensagem(myid-1, myid, rec_buffer, sizeof(double)*(n+2));
 				dm2dSetLine(matrix_aux, 0, rec_buffer);
 			}
+			/*envia linhas de baixo*/
 			if (myid != n/klinhas) {
 				env_buffer = dm2dGetLine(matrix_aux, klinhas);
 				enviarMensagem(myid, myid+1, env_buffer, sizeof(double)*(n+2));
@@ -171,8 +173,8 @@ void* slaveWork(void* a) {
 ---------------------------------------------------------------------*/
 
 int main(int argc, char** argv) {
-	int i, j, nlinhas;
-	double* buffer;
+	int N, iteracoes, trab, csz, i, j, nlinhas;
+	double tEsq, tSup, tDir, tInf,* buffer;
 	args_t* slave_args; pthread_t* slaves;
 	DoubleMatrix2D *result;
 
@@ -183,14 +185,14 @@ int main(int argc, char** argv) {
 	}
 
 	/* argv[0] = program name */
-	int N = parse_integer_or_exit(argv[1], "N");
-	double tEsq = parse_double_or_exit(argv[2], "tEsq");
-	double tSup = parse_double_or_exit(argv[3], "tSup");
-	double tDir = parse_double_or_exit(argv[4], "tDir");
-	double tInf = parse_double_or_exit(argv[5], "tInf");
-	int iteracoes = parse_integer_or_exit(argv[6], "iteracoes");
-	int trab = parse_integer_or_exit(argv[7], "trabalhadoras");
-	int csz = parse_integer_or_exit(argv[8], "mensagens_por_canal");
+	N = parse_integer_or_exit(argv[1], "N");
+	tEsq = parse_double_or_exit(argv[2], "tEsq");
+	tSup = parse_double_or_exit(argv[3], "tSup");
+	tDir = parse_double_or_exit(argv[4], "tDir");
+	tInf = parse_double_or_exit(argv[5], "tInf");
+	iteracoes = parse_integer_or_exit(argv[6], "iteracoes");
+	trab = parse_integer_or_exit(argv[7], "trabalhadoras");
+	csz = parse_integer_or_exit(argv[8], "mensagens_por_canal");
 
 	/*Verificar argumentos*/
 	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || csz < 0) {

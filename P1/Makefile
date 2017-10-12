@@ -17,9 +17,6 @@ zip:
 
 run:    heatSim
 	./heatSim 5 10.0 10.0 0.0 0.0 10 5 2
-	
-run1:	heatSim
-	./heatSim 5 10.0 8.0 6.0 4.0 10 5 2
 
 leak:	heatSim
 	valgrind --tool=memcheck --leak-check=yes ./heatSim 5 10.0 10.0 0.0 0.0 10 5 2

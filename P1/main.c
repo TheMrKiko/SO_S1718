@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 	buffer[0] = tEsq; buffer[1] = tSup; buffer[2] = tDir; buffer[3] = tInf;
 
 	/*Criar Threads*/
-	if (inicializarMPlib(1, trab+1) == -1) {
+	if (inicializarMPlib(csz, trab+1) == -1) {
 		printf("Erro: Nao foi possivel inicializar o MPLib.\n");
 		return -1;
 	}

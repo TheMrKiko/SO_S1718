@@ -29,7 +29,7 @@ DoubleMatrix2D* simul(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int li
 			};
 
 		};
-        dm2dPrint(other);
+        //dm2dPrint(other);
 		aux = act_matrix;
 		act_matrix = other;
 		other = aux;
@@ -121,7 +121,7 @@ int main (int argc, char** argv) {
 
 	result = simul(matrix, matrix_aux, N+2, N+2, iteracoes);
 
-	//dm2dPrint(result);
+	dm2dPrint(result);
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);

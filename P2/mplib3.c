@@ -3,6 +3,12 @@
 // Sistemas Operativos, DEI/IST/ULisboa 2017-18
 */
 
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~ Joao Daniel Silva 86445 ~ Francisco do Canto Sousa 86416 ~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
 #include "mplib3.h"
 #include "leQueue.h"
 
@@ -18,9 +24,9 @@
 
 typedef struct message_t {
 	QueElem	elem;
-	void	*contents;
-	int		mess_size;
-	int		consumed;
+	void *contents;
+	int mess_size;
+	int consumed;
 } Message_t;
 
 typedef struct channel_t {
@@ -79,11 +85,11 @@ Channel_t* createChannel() {
 int inicializarMPlib(int capacidade_de_cada_canal, int ntasks) {
 	int	i, j;
 	Channel_t* channel;
-	number_of_tasks  = ntasks;
+	number_of_tasks = ntasks;
 	channel_capacity = capacidade_de_cada_canal;
 
-	channel_array	= (Channel_t**) malloc(sizeof(Channel_t*) * ntasks*ntasks);
-	mutexes			= (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t) * ntasks*ntasks);
+	channel_array = (Channel_t**) malloc(sizeof(Channel_t*) * ntasks*ntasks);
+	mutexes = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t) * ntasks*ntasks);
 	waitezonos_for_free_space = (pthread_cond_t*) malloc(sizeof(pthread_cond_t) * ntasks*ntasks);
 	waitezonos_for_messages = (pthread_cond_t*) malloc(sizeof(pthread_cond_t) * ntasks*ntasks);
 
@@ -150,7 +156,7 @@ void libertarMPlib() {
 			Channel_t *channel = channel_array[i*number_of_tasks + j];
 			Message_t *mess = (Message_t*) leQueRemFirst(channel->message_list);
 
-			if (pthread_mutex_destroy(&mutexes[i*number_of_tasks+j]) != 0) {
+			if (pthread_mutex_destroy(&mutexes[i*number_of_tasks + j]) != 0) {
 				fprintf(stderr, "\nErro ao destruir mutex\n");
 				exit(EXIT_FAILURE);
 			}
@@ -216,9 +222,10 @@ int receberMensagem(int tarefaOrig, int tarefaDest, void *buffer, int tamanho) {
 		mess = (Message_t*) leQueRemFirst(channel->message_list);
 	}
 
-	copysize = (mess->mess_size<tamanho) ? mess->mess_size : tamanho;
+	copysize = (mess->mess_size < tamanho) ? mess->mess_size : tamanho;
 	memcpy(buffer, mess->contents, copysize);
-	if (channel_capacity >~0) {
+
+	if (channel_capacity > 0) {
 		free(mess->contents);
 		free(mess);
 	} else {

@@ -16,6 +16,9 @@
 
 #include "matrix2d.h"
 
+#define smaller(A, B) A < B ? A : B
+#define less(A, B) A < B ? 1 : 0
+
 pthread_mutex_t mutex;
 pthread_cond_t barreira;
 
@@ -24,12 +27,14 @@ typedef struct {
 	int colunas;
 	int klinhas;
 	int iter;
+	double maxD;
 	DoubleMatrix2D* matrix;
 	DoubleMatrix2D* matrix_aux;
 	DoubleMatrix2D** pmatrix_res;
 } args_t;
 
 int threads_on_wait = 0;
+int go_maxD = 1;
 
 /*void esperarBarreira(int trabs) {
 	pthread_mutex_lock(&mutex);
@@ -44,13 +49,43 @@ int threads_on_wait = 0;
 
 }*/
 
+/*void esperarBarreira(int trabs) {
+	pthread_mutex_lock(&mutex);
+	threads_on_wait++;
+	while (threads_on_wait < trabs) {
+		pthread_cond_wait(&barreira, &mutex);
+	}
+	if (threads_on_wait == trabs) {
+		threads_on_wait = 0;
+		pthread_cond_broadcast(&barreira, &mutex);
+	}
+	pthread_mutex_unlock(&mutex);
+
+}*/
+
+/*void esperarBarreira(int trabs) {
+	pthread_mutex_lock(&mutex);
+	threads_on_wait++;
+
+	if (threads_on_wait == trabs) {
+		threads_on_wait = 0;
+		pthread_cond_broadcast(&barreira, &mutex);
+	} else {
+		while (threads_on_wait < trabs) {
+			pthread_cond_wait(&barreira, &mutex);
+		}
+	}
+	pthread_mutex_unlock(&mutex);
+
+}*/
+
 /*--------------------------------------------------------------------
 | Function: simulFatia
 ---------------------------------------------------------------------*/
 
-DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas, int linha_ini) {
+DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas, int linha_ini, double maxD, double* pmin) {
 	int l, c;
-	double value;
+	double value, diff;
 	DoubleMatrix2D* act_matrix = matrix,* oth_matrix = matrix_aux;
 
 	if (linhas < 2 || colunas < 2) {
@@ -60,6 +95,8 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 	for (l = linha_ini; l < linha_ini + linhas; l++) {
 		for (c = 1; c < colunas - 1; c++) {
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
+			diff = abs(value - dm2dGetEntry(act_matrix, l, c));
+			*pmin = smaller(*pmin, diff);
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
 	}
@@ -97,42 +134,61 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, itop = 0;
+	double min_slave, maxD;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
 	args_t* args = (args_t*) a;
 
+	/*Ler argumentos*/
 	myid = args->id;
 	n = args->colunas;
 	klinhas = args->klinhas;
 	iteracoes = args->iter;
+	maxD = args->maxD;
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
 	pmatrix_res = args->pmatrix_res;
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
+	min_slave = maxD + 1;
 
 	/*Calcular valores*/
-	for (i = 0; i < iteracoes; i++) {
-		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n+2, linha_ini);
+	for (i = 0; i < iteracoes && go_maxD; i++) {
+		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n+2, linha_ini, maxD, &min_slave);
 		if (matrix_res == NULL) {
-			printf("\nErro na simulacao.\n\n");
+			fprintf(stderr, "\nErro na simulacao.\n");
 			exit(-1);
 		}
 		matrix_aux = matrix;
 		matrix = matrix_res;
-		pthread_mutex_lock(&mutex);
-		*pmatrix_res = matrix_res;
+
+		if (pthread_mutex_lock(&mutex)){
+			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
+			exit(-1);
+		}
+		go_maxD = less(min_slave, maxD) ? 0 : go_maxD;
 		if (threads_on_wait < trabs-1)  {
 			threads_on_wait++;
-			pthread_cond_wait(&barreira, &mutex);
+			if (pthread_cond_wait(&barreira, &mutex)){
+				fprintf(stderr, "\nErro: Falha a esperar pela condicao.\n");
+				exit(-1);
+			}
 		} else {
 			threads_on_wait = 0;
-			pthread_cond_broadcast(&barreira);
+			if (pthread_cond_broadcast(&barreira)){
+				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
+				exit(-1);
+			}
 		}
-		pthread_mutex_unlock(&mutex);
-
+		if (pthread_mutex_unlock(&mutex)){
+			fprintf(stderr, "\nErro: Nao foi possivel libertar o mutex.\n");
+			exit(-1);
+		}
+		itop = i > itop ? i : itop;
 	}
+	printf(" ESTOU AQUI %d\n", itop);
+	if (myid == 1) *pmatrix_res = matrix_res;
 	pthread_exit(NULL);
 }
 
@@ -142,13 +198,13 @@ void* slaveWork(void* a) {
 
 int main (int argc, char** argv) {
 	int N, iteracoes, trab, klinhas, i;
-	double tEsq, tSup, tDir, tInf;
+	double tEsq, tSup, tDir, tInf, maxD;
 	DoubleMatrix2D *matrix, *matrix_aux, *result;
 	args_t* slave_args; pthread_t* slaves;
 
-	if (argc != 8) {
+	if (argc != 9) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
-		fprintf(stderr, "Uso: heatSim N tEsq tSup tDir tInf iteracoes trabalhadoras\n\n");
+		fprintf(stderr, "Uso: heatSim N tEsq tSup tDir tInf iteracoes trabalhadoras maxD\n\n");
 		return 1;
 	}
 
@@ -160,17 +216,18 @@ int main (int argc, char** argv) {
 	tInf = parse_double_or_exit(argv[5], "tInf");
 	iteracoes = parse_integer_or_exit(argv[6], "iteracoes");
 	trab = parse_integer_or_exit(argv[7], "trabalhadoras");
-	//csz = parse_integer_or_exit(argv[8], "mensagens_por_canal");
+	maxD = parse_double_or_exit(argv[8], "diferenca_maxima");
 
-
-	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0) {
+	/*Validar argumentos*/
+	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || maxD < 0) {
 		fprintf(stderr, "\nErro: Argumentos invalidos.\n");
-		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0 e iteracoes >= 1\n");
+		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0,  trabalhadoras e iteracoes >= 1, diferenca maxima >= 0\n");
 		return 1;
 	}
 
-	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab);
+	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD);
 
+	/*Criar matriz*/
 	matrix = dm2dNew(N+2, N+2);
 	matrix_aux = dm2dNew(N+2, N+2);
 
@@ -179,9 +236,11 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
+	/*Alocar slaves*/
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
     slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
 
+	/*Inicializar matriz*/
 	dm2dSetLineTo(matrix, 0, tSup);
 	dm2dSetLineTo(matrix, N+1, tInf);
 	dm2dSetColumnTo(matrix, 0, tEsq);
@@ -197,6 +256,7 @@ int main (int argc, char** argv) {
 	    slave_args[i].colunas = N;
 		slave_args[i].klinhas = klinhas;
 		slave_args[i].iter = iteracoes;
+		slave_args[i].maxD = maxD;
 		slave_args[i].matrix = matrix;
 		slave_args[i].matrix_aux = matrix_aux;
 		slave_args[i].pmatrix_res = &result;
@@ -220,6 +280,5 @@ int main (int argc, char** argv) {
 	dm2dFree(matrix_aux);
 	free(slave_args);
 	free(slaves);
-
 	return 0;
 }

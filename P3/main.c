@@ -13,11 +13,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "matrix2d.h"
 
-#define smaller(A, B) A < B ? A : B
-#define less(A, B) A < B ? 1 : 0
+#define omenor(A, B) A < B ? A : B
+#define emenor(A, B) A < B ? 1 : 0
+#define emaior(A, B) A > B ? 1 : 0
 
 pthread_mutex_t mutex;
 pthread_cond_t barreira;
@@ -35,6 +37,22 @@ typedef struct {
 
 int threads_on_wait = 0;
 int go_maxD = 1;
+double max_min = 0;
+
+void calcMaxMin(double th_min) {
+	if (emaior(th_min, max_min)) {
+		max_min = th_min;
+	}
+}
+
+void atualizaGoMaxD(double maxD) {
+	printf("ATUALIZA????????? para %f\n", max_min);
+	if (emenor(max_min, maxD)) {
+		go_maxD = 0;
+		printf("omg atualizou\n" );
+	}
+	max_min = 0;
+}
 
 /*void esperarBarreira(int trabs) {
 	pthread_mutex_lock(&mutex);
@@ -88,15 +106,14 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 	double value, diff;
 	DoubleMatrix2D* act_matrix = matrix,* oth_matrix = matrix_aux;
 
-	if (linhas < 2 || colunas < 2) {
-		return NULL;
-	}
-
 	for (l = linha_ini; l < linha_ini + linhas; l++) {
-		for (c = 1; c < colunas - 1; c++) {
+		for (c = 1; c < colunas +1; c++) {
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
-			diff = abs(value - dm2dGetEntry(act_matrix, l, c));
-			*pmin = smaller(*pmin, diff);
+			//printf("abs value=%f e antiga=%f\n", value, dm2dGetEntry(act_matrix, l, c));
+			diff = fabs(value - dm2dGetEntry(act_matrix, l, c));
+			//printf("testa %f e %f, compara com %f\n", value, diff, *pmin);
+			*pmin = omenor(*pmin, diff);
+			//printf("o novo conte de min é %f\n", *pmin);
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
 	}
@@ -134,7 +151,7 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, itop = 0;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs;
 	double min_slave, maxD;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
 	args_t* args = (args_t*) a;
@@ -151,11 +168,11 @@ void* slaveWork(void* a) {
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
-	min_slave = maxD + 1;
+	min_slave = maxD *2;
 
 	/*Calcular valores*/
 	for (i = 0; i < iteracoes && go_maxD; i++) {
-		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n+2, linha_ini, maxD, &min_slave);
+		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &min_slave);
 		if (matrix_res == NULL) {
 			fprintf(stderr, "\nErro na simulacao.\n");
 			exit(-1);
@@ -167,7 +184,11 @@ void* slaveWork(void* a) {
 			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
 			exit(-1);
 		}
-		go_maxD = less(min_slave, maxD) ? 0 : go_maxD;
+		//printf("go max antes e %d\n", go_maxD);
+		calcMaxMin(min_slave);
+		//go_maxD = emenor(min_slave, maxD) ? 0 : go_maxD;
+		//printf("go max agora e %d e emenor(minslave=%f, maxD=%f)\n", go_maxD, min_slave, maxD);
+
 		if (threads_on_wait < trabs-1)  {
 			threads_on_wait++;
 			if (pthread_cond_wait(&barreira, &mutex)){
@@ -176,6 +197,7 @@ void* slaveWork(void* a) {
 			}
 		} else {
 			threads_on_wait = 0;
+			atualizaGoMaxD(maxD);
 			if (pthread_cond_broadcast(&barreira)){
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);
@@ -185,9 +207,8 @@ void* slaveWork(void* a) {
 			fprintf(stderr, "\nErro: Nao foi possivel libertar o mutex.\n");
 			exit(-1);
 		}
-		itop = i > itop ? i : itop;
 	}
-	printf(" ESTOU AQUI %d\n", itop);
+	printf("ESTOU AQUI %d\n", i-1);
 	if (myid == 1) *pmatrix_res = matrix_res;
 	pthread_exit(NULL);
 }

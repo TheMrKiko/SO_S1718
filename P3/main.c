@@ -35,8 +35,7 @@ typedef struct {
 	DoubleMatrix2D** pmatrix_res;
 } args_t;
 
-int threads_on_wait = 0;
-int go_maxD = 1;
+int threads_on_wait = 0, iteracao = 0, go_maxD = 1;
 double max_min = 0;
 
 void calcMaxMin(double th_min) {
@@ -54,49 +53,6 @@ void atualizaGoMaxD(double maxD) {
 	max_min = 0;
 }
 
-/*void esperarBarreira(int trabs) {
-	pthread_mutex_lock(&mutex);
-	if (threads_on_wait < trabs)  {
-		threads_on_wait++;
-		pthread_cond_wait(&barreira, &mutex);
-	} else {
-		threads_on_wait = 0;
-		pthread_cond_broadcast(&barreira, &mutex);
-	}
-	pthread_mutex_unlock(&mutex);
-
-}*/
-
-/*void esperarBarreira(int trabs) {
-	pthread_mutex_lock(&mutex);
-	threads_on_wait++;
-	while (threads_on_wait < trabs) {
-		pthread_cond_wait(&barreira, &mutex);
-	}
-	if (threads_on_wait == trabs) {
-		threads_on_wait = 0;
-		pthread_cond_broadcast(&barreira, &mutex);
-	}
-	pthread_mutex_unlock(&mutex);
-
-}*/
-
-/*void esperarBarreira(int trabs) {
-	pthread_mutex_lock(&mutex);
-	threads_on_wait++;
-
-	if (threads_on_wait == trabs) {
-		threads_on_wait = 0;
-		pthread_cond_broadcast(&barreira, &mutex);
-	} else {
-		while (threads_on_wait < trabs) {
-			pthread_cond_wait(&barreira, &mutex);
-		}
-	}
-	pthread_mutex_unlock(&mutex);
-
-}*/
-
 /*--------------------------------------------------------------------
 | Function: simulFatia
 ---------------------------------------------------------------------*/
@@ -109,11 +65,10 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 	for (l = linha_ini; l < linha_ini + linhas; l++) {
 		for (c = 1; c < colunas +1; c++) {
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
-			//printf("abs value=%f e antiga=%f\n", value, dm2dGetEntry(act_matrix, l, c));
+			
 			diff = fabs(value - dm2dGetEntry(act_matrix, l, c));
-			//printf("testa %f e %f, compara com %f\n", value, diff, *pmin);
 			*pmin = omenor(*pmin, diff);
-			//printf("o novo conte de min é %f\n", *pmin);
+			
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
 	}
@@ -126,6 +81,7 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 
 int parse_integer_or_exit(char const *str, char const *name) {
 	int value;
+
 	if (sscanf(str, "%d", &value) != 1) {
 		fprintf(stderr, "\nErro no argumento \"%s\".\n\n", name);
 		exit(1);
@@ -139,6 +95,7 @@ int parse_integer_or_exit(char const *str, char const *name) {
 
 double parse_double_or_exit(char const *str, char const *name) {
 	double value;
+
 	if (sscanf(str, "%lf", &value) != 1) {
 		fprintf(stderr, "\nErro no argumento \"%s\".\n\n", name);
 		exit(1);
@@ -168,11 +125,12 @@ void* slaveWork(void* a) {
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
-	min_slave = maxD *2;
+	min_slave = maxD * 2;
 
 	/*Calcular valores*/
 	for (i = 0; i < iteracoes && go_maxD; i++) {
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &min_slave);
+
 		if (matrix_res == NULL) {
 			fprintf(stderr, "\nErro na simulacao.\n");
 			exit(-1);
@@ -180,35 +138,37 @@ void* slaveWork(void* a) {
 		matrix_aux = matrix;
 		matrix = matrix_res;
 
-		if (pthread_mutex_lock(&mutex)){
+		if (pthread_mutex_lock(&mutex)) {
 			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
 			exit(-1);
 		}
-		//printf("go max antes e %d\n", go_maxD);
+		
 		calcMaxMin(min_slave);
-		//go_maxD = emenor(min_slave, maxD) ? 0 : go_maxD;
-		//printf("go max agora e %d e emenor(minslave=%f, maxD=%f)\n", go_maxD, min_slave, maxD);
+		threads_on_wait++;
 
-		if (threads_on_wait < trabs-1)  {
-			threads_on_wait++;
-			if (pthread_cond_wait(&barreira, &mutex)){
-				fprintf(stderr, "\nErro: Falha a esperar pela condicao.\n");
-				exit(-1);
-			}
-		} else {
+		if (threads_on_wait == trabs) {
 			threads_on_wait = 0;
+			iteracao++;
 			atualizaGoMaxD(maxD);
-			if (pthread_cond_broadcast(&barreira)){
+
+			if (pthread_cond_broadcast(&barreira)) {
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);
 			}
+
+		} else {
+			while (i >= iteracao) {
+				if (pthread_cond_wait(&barreira, &mutex)) {
+					fprintf(stderr, "\nErro: Falha a esperar pela condicao.\n");
+					exit(-1);
+				}
+			}
 		}
-		if (pthread_mutex_unlock(&mutex)){
+		if (pthread_mutex_unlock(&mutex)) {
 			fprintf(stderr, "\nErro: Nao foi possivel libertar o mutex.\n");
 			exit(-1);
 		}
 	}
-	printf("ESTOU AQUI %d\n", i-1);
 	if (myid == 1) *pmatrix_res = matrix_res;
 	pthread_exit(NULL);
 }

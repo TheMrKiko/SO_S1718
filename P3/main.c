@@ -42,21 +42,21 @@ typedef struct {
 } args_t;
 
 int threads_on_wait = 0, iteracao = 0, go_maxD = 1;
-double max_min = 0;
+double max_max = 0;
 
-void calcMaxMin(double th_min) {
-	if (emaior(th_min, max_min)) {
-		max_min = th_min;
+void calcMaxMax(double th_min) {
+	if (emaior(th_min, max_max)) {
+		max_max = th_min;
 	}
 }
 
 void atualizaGoMaxD(double maxD) {
-	printf("ATUALIZA????????? para %f\n", max_min);
-	if (emenor(max_min, maxD)) {
+	printf("ATUALIZA????????? para %f\n", max_max);
+	if (emenor(max_max, maxD)) {
 		go_maxD = 0;
 		printf("omg atualizou\n" );
 	}
-	max_min = 0;
+	max_max = 0;
 }
 
 /*--------------------------------------------------------------------
@@ -65,7 +65,7 @@ void atualizaGoMaxD(double maxD) {
 				Processa um bloco da matriz dada como argumento.
 ---------------------------------------------------------------------*/
 
-DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas, int linha_ini, double maxD, double* pmin) {
+DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, int linhas, int colunas, int linha_ini, double maxD, double* pmax) {
 	int l, c;
 	double value, diff;
 	DoubleMatrix2D* act_matrix = matrix,* oth_matrix = matrix_aux;
@@ -75,7 +75,7 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
 			
 			diff = fabs(value - dm2dGetEntry(act_matrix, l, c));
-			*pmin = omaior(*pmin, diff);
+			*pmax = omaior(*pmax, diff);
 			
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
@@ -121,7 +121,7 @@ double parse_double_or_exit(char const *str, char const *name) {
 
 void* slaveWork(void* a) {
 	int i, iteracoes, myid, n, klinhas, linha_ini, trabs;
-	double min_slave, maxD;
+	double max_slave, maxD;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
 	args_t* args = (args_t*) a;
 
@@ -137,11 +137,11 @@ void* slaveWork(void* a) {
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
-	min_slave = 0;
+	max_slave = 0;
 
 	/*Calcular valores*/
 	for (i = 0; i < iteracoes && go_maxD; i++) {
-		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &min_slave);
+		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &max_slave);
 
 		if (matrix_res == NULL) {
 			fprintf(stderr, "\nErro na simulacao.\n");
@@ -156,9 +156,9 @@ void* slaveWork(void* a) {
 		}
 		
 		threads_on_wait++;
-		printf("Sou a thread %d com a max de %f contra o %f\n", myid, min_slave, max_min);
-		calcMaxMin(min_slave);
-		min_slave = 0;
+		printf("Sou a thread %d com a max de %f contra o %f\n", myid, max_slave, max_max);
+		calcMaxMax(max_slave);
+		max_slave = 0;
 
 		if (threads_on_wait == trabs) {
 			threads_on_wait = 0;

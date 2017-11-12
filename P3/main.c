@@ -18,6 +18,7 @@
 #include "matrix2d.h"
 
 #define omenor(A, B) A < B ? A : B
+#define omaior(A, B) A > B ? A : B
 #define emenor(A, B) A < B ? 1 : 0
 #define emaior(A, B) A > B ? 1 : 0
 
@@ -74,7 +75,7 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
 			
 			diff = fabs(value - dm2dGetEntry(act_matrix, l, c));
-			*pmin = omenor(*pmin, diff);
+			*pmin = omaior(*pmin, diff);
 			
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
@@ -136,7 +137,7 @@ void* slaveWork(void* a) {
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
-	min_slave = maxD * 2;
+	min_slave = 0;
 
 	/*Calcular valores*/
 	for (i = 0; i < iteracoes && go_maxD; i++) {
@@ -154,14 +155,16 @@ void* slaveWork(void* a) {
 			exit(-1);
 		}
 		
-		calcMaxMin(min_slave);
 		threads_on_wait++;
+		printf("Sou a thread %d com a max de %f contra o %f\n", myid, min_slave, max_min);
+		calcMaxMin(min_slave);
+		min_slave = 0;
 
 		if (threads_on_wait == trabs) {
 			threads_on_wait = 0;
 			iteracao++;
 			atualizaGoMaxD(maxD);
-
+			
 			if (pthread_cond_broadcast(&barreira)) {
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);

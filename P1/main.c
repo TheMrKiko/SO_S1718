@@ -109,7 +109,8 @@ void* slaveWork(void* a) {
 
 	if (myid == 1) {
 		dm2dSetLineTo(matrix, 0, rec_buffer[1]);
-	} else if (myid == n/klinhas) {
+	}
+	if (myid == n/klinhas) {
 		dm2dSetLineTo(matrix, klinhas+1, rec_buffer[3]);
 	}
 

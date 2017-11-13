@@ -51,10 +51,8 @@ void calcMaxMax(double th_min) {
 }
 
 void atualizaGoMaxD(double maxD) {
-	printf("ATUALIZA????????? para %f\n", max_max);
 	if (emenor(max_max, maxD)) {
 		go_maxD = 0;
-		printf("omg atualizou\n" );
 	}
 	max_max = 0;
 }
@@ -144,7 +142,7 @@ void* slaveWork(void* a) {
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &max_slave);
 
 		if (matrix_res == NULL) {
-			fprintf(stderr, "\nErro na simulacao.\n");
+			fprintf(stderr, "\nErro: Falha na simulacao.\n");
 			exit(-1);
 		}
 		matrix_aux = matrix;
@@ -156,7 +154,6 @@ void* slaveWork(void* a) {
 		}
 
 		threads_on_wait++;
-		printf("Sou a thread %d com a max de %f contra o %f\n", myid, max_slave, max_max);
 		calcMaxMax(max_slave);
 		max_slave = 0;
 

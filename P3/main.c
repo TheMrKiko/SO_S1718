@@ -27,7 +27,7 @@ pthread_cond_t barreira;
 
 /*--------------------------------------------------------------------
 | Type: args_t
-| Description: Estrutura com Informação para Trabalhadoras
+| Description: Estrutura com Informacao para Trabalhadoras
 ---------------------------------------------------------------------*/
 
 typedef struct {
@@ -61,7 +61,7 @@ void atualizaGoMaxD(double maxD) {
 
 /*--------------------------------------------------------------------
 | Function: simulFatia
-| Description:	Função executada por cada tarefa trabalhadora a cada interacao.
+| Description:	Funcao executada por cada tarefa trabalhadora a cada interacao.
 				Processa um bloco da matriz dada como argumento.
 ---------------------------------------------------------------------*/
 
@@ -115,7 +115,7 @@ double parse_double_or_exit(char const *str, char const *name) {
 
 /*--------------------------------------------------------------------
 | Function: judaniWork
-| Description: Função executada por cada tarefa trabalhadora.
+| Description: Funcao executada por cada tarefa trabalhadora.
 |              Recebe como argumento uma estrutura do tipo args_t.
 --------------------------------------------------------------------*/
 
@@ -256,7 +256,7 @@ int main (int argc, char** argv) {
 		slave_args[i].matrix = matrix;
 		slave_args[i].matrix_aux = matrix_aux;
 		slave_args[i].pmatrix_res = &result;
-	    if (pthread_create(&slaves[i], NULL, slaveWork, &slave_args[i])){
+	    if (pthread_create(&slaves[i], NULL, slaveWork, &slave_args[i])) {
 			fprintf(stderr, "\nErro: Um escravo falhou a criar.\n");
 	        return -1;
 		}
@@ -264,10 +264,20 @@ int main (int argc, char** argv) {
 
 	/*Terminar e Imprimir*/
 	for (i = 0; i < trab; i++) {
-		if (pthread_join(slaves[i], NULL)){
+		if (pthread_join(slaves[i], NULL)) {
 			fprintf(stderr, "\nErro: Um escravo falhou a terminar.\n");
 	        return -1;
 		}
+	}
+
+	if (pthread_mutex_destroy(&mutex) != 0) {
+		fprintf(stderr, "\nErro: Falhou a destruir mutex.\n");
+		return -1;
+	}
+
+	if (pthread_cond_destroy(&barreira) != 0) {
+		fprintf(stderr, "\nErro: Falhou a destruir variavel de condicao.\n");
+		return -1;
 	}
 
 	dm2dPrint(result);

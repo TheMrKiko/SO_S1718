@@ -73,10 +73,10 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 	for (l = linha_ini; l < linha_ini + linhas; l++) {
 		for (c = 1; c < colunas +1; c++) {
 			value = (dm2dGetEntry(act_matrix, l-1, c) + dm2dGetEntry(act_matrix, l+1, c) + dm2dGetEntry(act_matrix, l, c-1) + dm2dGetEntry(act_matrix, l, c+1))/4.0;
-			
+
 			diff = fabs(value - dm2dGetEntry(act_matrix, l, c));
 			*pmax = omaior(*pmax, diff);
-			
+
 			dm2dSetEntry(oth_matrix, l, c, value);
 		}
 	}
@@ -154,7 +154,7 @@ void* slaveWork(void* a) {
 			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
 			exit(-1);
 		}
-		
+
 		threads_on_wait++;
 		printf("Sou a thread %d com a max de %f contra o %f\n", myid, max_slave, max_max);
 		calcMaxMax(max_slave);
@@ -164,7 +164,7 @@ void* slaveWork(void* a) {
 			threads_on_wait = 0;
 			iteracao++;
 			atualizaGoMaxD(maxD);
-			
+
 			if (pthread_cond_broadcast(&barreira)) {
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);
@@ -184,7 +184,7 @@ void* slaveWork(void* a) {
 		}
 	}
 	if (myid == 1) *pmatrix_res = matrix_res;
-	pthread_exit(NULL);
+	return NULL;
 }
 
 /*--------------------------------------------------------------------

@@ -13,7 +13,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <pthread.h>
+#include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "matrix2d.h"
 
@@ -35,7 +37,9 @@ typedef struct {
 	int colunas;
 	int klinhas;
 	int iter;
+	int periodoS;
 	double maxD;
+	char* fichS;
 	DoubleMatrix2D* matrix;
 	DoubleMatrix2D* matrix_aux;
 	DoubleMatrix2D** pmatrix_res;
@@ -118,10 +122,12 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, periodo, idproc;
 	double max_slave, maxD;
+	char* ficheiro;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
 	args_t* args = (args_t*) a;
+	FILE* apontoParaUmFile;
 
 	/*Ler argumentos*/
 	myid = args->id;
@@ -129,6 +135,8 @@ void* slaveWork(void* a) {
 	klinhas = args->klinhas;
 	iteracoes = args->iter;
 	maxD = args->maxD;
+	periodo = args->periodoS;
+	ficheiro = args->fichS;
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
 	pmatrix_res = args->pmatrix_res;
@@ -167,6 +175,18 @@ void* slaveWork(void* a) {
 				exit(-1);
 			}
 
+			if (periodo && !((i+1)%periodo) ) {
+				idproc = fork();
+				if (idproc == 0) {
+					apontoParaUmFile = fopen(ficheiro,"w");
+					if (apontoParaUmFile == NULL) {
+						perror(ficheiro);
+					}
+					dm2dPrintToFile(matrix_res, apontoParaUmFile);
+					fclose(apontoParaUmFile);
+				}
+			}
+
 		} else {
 			while (i >= iteracao) {
 				if (pthread_cond_wait(&barreira, &mutex)) {
@@ -179,6 +199,7 @@ void* slaveWork(void* a) {
 			fprintf(stderr, "\nErro: Nao foi possivel libertar o mutex.\n");
 			exit(-1);
 		}
+
 	}
 	if (myid == 1) *pmatrix_res = matrix_res;
 	return NULL;
@@ -190,14 +211,16 @@ void* slaveWork(void* a) {
 ---------------------------------------------------------------------*/
 
 int main (int argc, char** argv) {
-	int N, iteracoes, trab, klinhas, i;
+	int N, iteracoes, trab, klinhas, periodoS, i;
 	double tEsq, tSup, tDir, tInf, maxD;
+	char* fichS;
 	DoubleMatrix2D *matrix, *matrix_aux, *result;
 	args_t* slave_args; pthread_t* slaves;
+	FILE* filep;
 
-	if (argc != 9) {
+	if (argc != 11) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
-		fprintf(stderr, "Uso: heatSim N tEsq tSup tDir tInf iteracoes trabalhadoras maxD\n\n");
+		fprintf(stderr, "Uso: heatSim N tEsq tSup tDir tInf iteracoes trabalhadoras maxD ficheiro periodo\n\n");
 		return 1;
 	}
 
@@ -210,28 +233,40 @@ int main (int argc, char** argv) {
 	iteracoes = parse_integer_or_exit(argv[6], "iteracoes");
 	trab = parse_integer_or_exit(argv[7], "trabalhadoras");
 	maxD = parse_double_or_exit(argv[8], "diferenca_maxima");
+	fichS = argv[9];
+	periodoS = parse_integer_or_exit(argv[10], "periodo");
 
 	/*Validar argumentos*/
-	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || maxD < 0) {
+	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || maxD < 0 || periodoS < 0 || !strlen(fichS)) {
 		fprintf(stderr, "\nErro: Argumentos invalidos.\n");
-		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0,  trabalhadoras e iteracoes >= 1, diferenca maxima >= 0\n");
+		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0,  trabalhadoras e iteracoes >= 1, diferenca maxima e periodo >= 0\n");
 		return 1;
 	}
 
-	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD);
+	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f ficheiro=%s  periodo=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD, fichS, periodoS);
 
-	/*Criar matriz*/
-	matrix = dm2dNew(N+2, N+2);
+	/*Alocar slaves*/
+	slave_args = (args_t*) malloc(trab*sizeof(args_t));
+    slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
+
+	/*Testa se existe o ficheiro*/
+	filep = fopen(fichS,"r");
+	if(filep) {
+		matrix = readMatrix2dFromFile(filep, N+2, N+2);
+		fclose(filep);
+		dm2dPrint(matrix);
+	}
+	else {
+		matrix = dm2dNew(N+2, N+2);
+	}
+
+	/*Criar matriz aux*/
 	matrix_aux = dm2dNew(N+2, N+2);
 
 	if (matrix == NULL || matrix_aux == NULL) {
 		fprintf(stderr, "\nErro: Nao foi possivel alocar memoria para as matrizes.\n\n");
 		return -1;
 	}
-
-	/*Alocar slaves*/
-	slave_args = (args_t*) malloc(trab*sizeof(args_t));
-    slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
 
 	/*Inicializar matriz*/
 	dm2dSetLineTo(matrix, 0, tSup);
@@ -250,6 +285,8 @@ int main (int argc, char** argv) {
 		slave_args[i].klinhas = klinhas;
 		slave_args[i].iter = iteracoes;
 		slave_args[i].maxD = maxD;
+		slave_args[i].periodoS = periodoS;
+		slave_args[i].fichS = fichS;
 		slave_args[i].matrix = matrix;
 		slave_args[i].matrix_aux = matrix_aux;
 		slave_args[i].pmatrix_res = &result;
@@ -277,18 +314,10 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
-	//FICHEIRO
+	/* FICHEIRO */
 
 	dm2dPrint(result);
-
-	FILE *fp;
-	fp = fopen("teste.txt","w");
-	if(fp == NULL) {
-		perror("teste.txt");
-	}
-
-	dm2dPrintToFile(result, fp);
-	fclose(fp);
+	/*eliminar o file aqui depois*/
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);

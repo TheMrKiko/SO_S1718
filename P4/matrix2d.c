@@ -111,6 +111,7 @@ void dm2dPrint (DoubleMatrix2D *matrix) {
 /*--------------------------------------------------------------------
 | Function: readMatrix2dFromFile
 ---------------------------------------------------------------------*/
+
 DoubleMatrix2D *readMatrix2dFromFile(FILE *f, int l, int c) {
   int i, j;
   double v;
@@ -123,9 +124,9 @@ DoubleMatrix2D *readMatrix2dFromFile(FILE *f, int l, int c) {
   if (m==NULL)
     return NULL;
 
-  //Ler pontos da matriz
-  //Nesta implementacao, ignora a existencia e posicionamento
-  //de quebras de linha
+  /* Ler pontos da matriz
+  Nesta implementacao, ignora a existencia e posicionamento
+  de quebras de linha */
   for (i = 0; i < l; i++) {
     for (j = 0; j < c; j++) {
       if (fscanf(f, "%lf", &v) != 1) {
@@ -139,13 +140,17 @@ DoubleMatrix2D *readMatrix2dFromFile(FILE *f, int l, int c) {
   return m;
 }
 
+/*--------------------------------------------------------------------
+| Function: dm2dPrintToFile
+---------------------------------------------------------------------*/
+
 void dm2dPrintToFile(DoubleMatrix2D *m, FILE *f) {
-  int i,j;
+  int i, j;
   double v;
-  for (i=0; i<m->n_l; i++) {
-    for (j=0; j<m->n_c; j++) {
-      v = dm2dGetEntry(m,i,j);
-      fprintf(f, "%lf", v);
+  for (i = 0; i < m->n_l; i++) {
+    for (j = 0; j < m->n_c; j++) {
+      v = dm2dGetEntry(m, i ,j);
+      fprintf(f, "%8.4f", v);
     }
   fprintf(f, "\n");
   }

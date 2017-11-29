@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "matrix2d.h"
@@ -40,6 +41,7 @@ typedef struct {
 	int periodoS;
 	double maxD;
 	char* fichS;
+	char* tempFichS;
 	DoubleMatrix2D* matrix;
 	DoubleMatrix2D* matrix_aux;
 	DoubleMatrix2D** pmatrix_res;
@@ -122,9 +124,9 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, periodo, idproc;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, periodo, idproc, estado;
 	double max_slave, maxD;
-	char* ficheiro;
+	char* ficheiro,* tempFicheiro;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
 	args_t* args = (args_t*) a;
 	FILE* apontoParaUmFile;
@@ -137,6 +139,7 @@ void* slaveWork(void* a) {
 	maxD = args->maxD;
 	periodo = args->periodoS;
 	ficheiro = args->fichS;
+	tempFicheiro = args->tempFichS;
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
 	pmatrix_res = args->pmatrix_res;
@@ -178,12 +181,21 @@ void* slaveWork(void* a) {
 			if (periodo && !((i+1)%periodo) ) {
 				idproc = fork();
 				if (idproc == 0) {
-					apontoParaUmFile = fopen(ficheiro,"w");
+					apontoParaUmFile = fopen(tempFicheiro,"w");
 					if (apontoParaUmFile == NULL) {
 						perror(ficheiro);
 					}
+
 					dm2dPrintToFile(matrix_res, apontoParaUmFile);
 					fclose(apontoParaUmFile);
+
+					if (rename(tempFicheiro, ficheiro)) {
+						fprintf(stderr, "\nErro: Falha a renomear ficheiro.\n");
+						exit(-1);
+					}
+					exit(0);
+				} else {
+					waitpid(idproc, &estado, 0);
 				}
 			}
 
@@ -213,7 +225,7 @@ void* slaveWork(void* a) {
 int main (int argc, char** argv) {
 	int N, iteracoes, trab, klinhas, periodoS, i;
 	double tEsq, tSup, tDir, tInf, maxD;
-	char* fichS;
+	char* fichS,* tempFichS;
 	DoubleMatrix2D *matrix, *matrix_aux, *result;
 	args_t* slave_args; pthread_t* slaves;
 	FILE* filep;
@@ -243,20 +255,22 @@ int main (int argc, char** argv) {
 		return 1;
 	}
 
-	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f ficheiro=%s  periodo=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD, fichS, periodoS);
+	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f ficheiro=%s periodo=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD, fichS, periodoS);
 
 	/*Alocar slaves*/
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
     slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
+	tempFichS = (char*) malloc((strlen(fichS)+1)*sizeof(char));
+	strcpy(tempFichS, "~");
+	strcat(tempFichS, fichS);
 
 	/*Testa se existe o ficheiro*/
 	filep = fopen(fichS,"r");
-	if(filep) {
+	if (filep) {
 		matrix = readMatrix2dFromFile(filep, N+2, N+2);
-		fclose(filep);
 		dm2dPrint(matrix);
-	}
-	else {
+		fclose(filep);
+	} else {
 		matrix = dm2dNew(N+2, N+2);
 	}
 
@@ -287,6 +301,7 @@ int main (int argc, char** argv) {
 		slave_args[i].maxD = maxD;
 		slave_args[i].periodoS = periodoS;
 		slave_args[i].fichS = fichS;
+		slave_args[i].tempFichS = tempFichS;
 		slave_args[i].matrix = matrix;
 		slave_args[i].matrix_aux = matrix_aux;
 		slave_args[i].pmatrix_res = &result;
@@ -303,6 +318,11 @@ int main (int argc, char** argv) {
 	        return -1;
 		}
 	}
+	/* FICHEIRO */
+	if (unlink(fichS) != 0) {
+		fprintf(stderr, "\nErro: Falhou a apagar o ficheiro.\n");
+		return -1;
+	}
 
 	if (pthread_mutex_destroy(&mutex) != 0) {
 		fprintf(stderr, "\nErro: Falhou a destruir mutex.\n");
@@ -314,13 +334,11 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
-	/* FICHEIRO */
-
 	dm2dPrint(result);
-	/*eliminar o file aqui depois*/
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);
+	free(tempFichS);
 	free(slave_args);
 	free(slaves);
 	return 0;

@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -38,17 +39,15 @@ typedef struct {
 	int colunas;
 	int klinhas;
 	int iter;
-	int periodoS;
 	double maxD;
-	char* fichS;
-	char* tempFichS;
 	DoubleMatrix2D* matrix;
 	DoubleMatrix2D* matrix_aux;
-	DoubleMatrix2D** pmatrix_res;
 } args_t;
 
-int threads_on_wait = 0, iteracao = 0, go_maxD = 1;
+int threads_on_wait = 0, iteracao = 0, periodo = 0, go_maxD = 1, go_alarm = 0;
 double max_max = 0;
+char* fichS,* tempFichS;
+DoubleMatrix2D* matrix_final;
 
 void calcMaxMax(double th_min) {
 	if (emaior(th_min, max_max)) {
@@ -61,6 +60,41 @@ void atualizaGoMaxD(double maxD) {
 		go_maxD = 0;
 	}
 	max_max = 0;
+}
+
+void escreverFicheiroTemporario(){
+	FILE* apontoParaUmFile;
+	printf("OIIOIOIOI\n" );
+	apontoParaUmFile = fopen(tempFichS,"w");
+
+	if (apontoParaUmFile == NULL) {
+		perror(tempFichS);
+	}
+	perror("filenameTem");
+	dm2dPrintToFile(matrix_final, apontoParaUmFile);
+	fclose(apontoParaUmFile);
+
+	if (rename(tempFichS, fichS)) {
+		fprintf(stderr, "\nErro: Falha a renomear ficheiro.\n");
+		exit(-1);
+	}
+}
+
+void handlerSIGALRM(int num) {
+	alarm(periodo);
+	go_alarm = 1;
+}
+
+void handlerSIGINT(int num) {
+	if (!waitpid(-1, NULL, WNOHANG)) { /*se ja esta a haver uma escrita*/
+		printf("A MEIO");
+		wait(NULL);
+	} else {
+				printf("FAZENDO NOVO");
+
+		escreverFicheiroTemporario();
+	}
+	exit(0);
 }
 
 /*--------------------------------------------------------------------
@@ -124,12 +158,10 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, periodo, idproc, estado;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, idproc, estado;
 	double max_slave, maxD;
-	char* ficheiro,* tempFicheiro;
-	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res,** pmatrix_res;
+	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res;
 	args_t* args = (args_t*) a;
-	FILE* apontoParaUmFile;
 
 	/*Ler argumentos*/
 	myid = args->id;
@@ -137,19 +169,15 @@ void* slaveWork(void* a) {
 	klinhas = args->klinhas;
 	iteracoes = args->iter;
 	maxD = args->maxD;
-	periodo = args->periodoS;
-	ficheiro = args->fichS;
-	tempFicheiro = args->tempFichS;
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
-	pmatrix_res = args->pmatrix_res;
 
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
 	max_slave = 0;
 
-	/*Calcular valores*/
 	for (i = 0; i < iteracoes && go_maxD; i++) {
+		/*Calcular matriz*/
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &max_slave);
 
 		if (matrix_res == NULL) {
@@ -173,30 +201,26 @@ void* slaveWork(void* a) {
 			iteracao++;
 			atualizaGoMaxD(maxD);
 
+			matrix_final = matrix_res;
+
+			if (go_alarm && !(go_alarm = 0) && waitpid(-1, NULL, WNOHANG)) {
+				idproc = fork();
+
+				if (idproc == -1) {
+
+				} else if (idproc == 0) {
+					/*Filho*/
+					escreverFicheiroTemporario();
+					exit(0);
+				} else {
+					/*Pai*/
+
+				}
+			}
+
 			if (pthread_cond_broadcast(&barreira)) {
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);
-			}
-
-			if (periodo && !((i+1)%periodo) ) {
-				idproc = fork();
-				if (idproc == 0) {
-					apontoParaUmFile = fopen(tempFicheiro,"w");
-					if (apontoParaUmFile == NULL) {
-						perror(ficheiro);
-					}
-
-					dm2dPrintToFile(matrix_res, apontoParaUmFile);
-					fclose(apontoParaUmFile);
-
-					if (rename(tempFicheiro, ficheiro)) {
-						fprintf(stderr, "\nErro: Falha a renomear ficheiro.\n");
-						exit(-1);
-					}
-					exit(0);
-				} else {
-					waitpid(idproc, &estado, 0);
-				}
 			}
 
 		} else {
@@ -213,7 +237,6 @@ void* slaveWork(void* a) {
 		}
 
 	}
-	if (myid == 1) *pmatrix_res = matrix_res;
 	return NULL;
 }
 
@@ -225,9 +248,9 @@ void* slaveWork(void* a) {
 int main (int argc, char** argv) {
 	int N, iteracoes, trab, klinhas, periodoS, i;
 	double tEsq, tSup, tDir, tInf, maxD;
-	char* fichS,* tempFichS;
-	DoubleMatrix2D *matrix, *matrix_aux, *result;
+	DoubleMatrix2D *matrix, *matrix_aux;
 	args_t* slave_args; pthread_t* slaves;
+	struct sigaction structSIGALRM, structSIGINT;
 	FILE* filep;
 
 	if (argc != 11) {
@@ -261,8 +284,8 @@ int main (int argc, char** argv) {
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
     slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
 	tempFichS = (char*) malloc((strlen(fichS)+1)*sizeof(char));
-	strcpy(tempFichS, "~");
-	strcat(tempFichS, fichS);
+	strcpy(tempFichS, fichS);
+	strcat(tempFichS, "~");
 
 	/*Testa se existe o ficheiro*/
 	filep = fopen(fichS,"r");
@@ -291,39 +314,51 @@ int main (int argc, char** argv) {
 	/*Repetir na auxiliar*/
 	dm2dCopy(matrix_aux, matrix);
 
+	structSIGALRM.sa_handler = &handlerSIGALRM;
+	if (sigaction(SIGALRM, &structSIGALRM, NULL) != 0) {
+		printf("Erro: \n");
+	}
+
+	structSIGINT.sa_handler = &handlerSIGINT;
+	if (sigaction(SIGINT, &structSIGINT, NULL) != 0) {
+		printf("Erro: \n");
+	}
 	/*Criar slaves*/
 	klinhas = N/trab;
+	periodo = periodoS;
+	alarm(periodo);
+
 	for (i = 0; i < trab; i++) {
 		slave_args[i].id = i+1;
 	    slave_args[i].colunas = N;
 		slave_args[i].klinhas = klinhas;
 		slave_args[i].iter = iteracoes;
 		slave_args[i].maxD = maxD;
-		slave_args[i].periodoS = periodoS;
-		slave_args[i].fichS = fichS;
-		slave_args[i].tempFichS = tempFichS;
 		slave_args[i].matrix = matrix;
 		slave_args[i].matrix_aux = matrix_aux;
-		slave_args[i].pmatrix_res = &result;
 	    if (pthread_create(&slaves[i], NULL, slaveWork, &slave_args[i])) {
 			fprintf(stderr, "\nErro: Um escravo falhou a criar.\n");
 	        return -1;
 		}
 	}
 
-	/*Terminar e Imprimir*/
+	/*Terminar threads*/
 	for (i = 0; i < trab; i++) {
 		if (pthread_join(slaves[i], NULL)) {
 			fprintf(stderr, "\nErro: Um escravo falhou a terminar.\n");
 	        return -1;
 		}
 	}
-	/* FICHEIRO */
-	if (unlink(fichS) != 0) {
+	/*Apagar ficheiro*/
+	wait(NULL);
+	if ((filep = fopen(fichS,"r")) && !fclose(filep) && unlink(fichS) != 0) {
 		fprintf(stderr, "\nErro: Falhou a apagar o ficheiro.\n");
 		return -1;
 	}
+	printf("OIsssOI\n" );
+	perror("FINAL");
 
+	/*Libertar e Imprimir*/
 	if (pthread_mutex_destroy(&mutex) != 0) {
 		fprintf(stderr, "\nErro: Falhou a destruir mutex.\n");
 		return -1;
@@ -334,7 +369,7 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
-	dm2dPrint(result);
+	dm2dPrint(matrix_final);
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);

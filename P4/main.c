@@ -44,7 +44,7 @@ typedef struct {
 	DoubleMatrix2D* matrix_aux;
 } args_t;
 
-int threads_on_wait = 0, iteracao = 0, periodo = 0, go_maxD = 1, go_alarm = 0;
+int threads_on_wait = 0, iteracao = 0, periodo = 0, idproc = 0, go_maxD = 1, go_alarm = 0, go_int = 1;
 double max_max = 0;
 char* fichS,* tempFichS;
 DoubleMatrix2D* matrix_final;
@@ -61,16 +61,16 @@ void atualizaGoMaxD(double maxD) {
 	}
 	max_max = 0;
 }
-
+/*CTROLC A MEIO DO PRINT DA BUG*/
 void escreverFicheiroTemporario(){
 	FILE* apontoParaUmFile;
-	printf("OIIOIOIOI\n" );
+	printf("SOU O %d A COMECAR A ESCREVER\n" , getpid() );
 	apontoParaUmFile = fopen(tempFichS,"w");
 
 	if (apontoParaUmFile == NULL) {
 		perror(tempFichS);
 	}
-	perror("filenameTem");
+
 	dm2dPrintToFile(matrix_final, apontoParaUmFile);
 	fclose(apontoParaUmFile);
 
@@ -78,19 +78,22 @@ void escreverFicheiroTemporario(){
 		fprintf(stderr, "\nErro: Falha a renomear ficheiro.\n");
 		exit(-1);
 	}
+	printf("SOU O %d A ACABAR DE ESCREVER\n", getpid() );
 }
 
 void handlerSIGALRM(int num) {
-	alarm(periodo);
 	go_alarm = 1;
+	alarm(periodo);
 }
 
 void handlerSIGINT(int num) {
-	if (!waitpid(-1, NULL, WNOHANG)) { /*se ja esta a haver uma escrita*/
-		printf("A MEIO");
-		wait(NULL);
+	int estado;
+	go_int = 0; alarm(0);
+	if (!waitpid(-1, &estado, WNOHANG)) { /*se ja esta a haver uma escrita*/
+		printf("SOU O %d e ALGUEM JA ESTA A MEIO\n", getpid());
+		wait(&estado);
 	} else {
-				printf("FAZENDO NOVO");
+                printf("SOU O %d e FAZENDO NOVA COPIA\n", getpid());
 
 		escreverFicheiroTemporario();
 	}
@@ -158,10 +161,11 @@ double parse_double_or_exit(char const *str, char const *name) {
 --------------------------------------------------------------------*/
 
 void* slaveWork(void* a) {
-	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, idproc, estado;
+	int i, iteracoes, myid, n, klinhas, linha_ini, trabs, estado;
 	double max_slave, maxD;
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res;
 	args_t* args = (args_t*) a;
+	struct sigaction structIGN;
 
 	/*Ler argumentos*/
 	myid = args->id;
@@ -172,11 +176,13 @@ void* slaveWork(void* a) {
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
 
+        char env[10];
+
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
 	max_slave = 0;
 
-	for (i = 0; i < iteracoes && go_maxD; i++) {
+	for (i = 0; i < iteracoes && go_maxD && go_int; i++) {
 		/*Calcular matriz*/
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &max_slave);
 
@@ -188,7 +194,7 @@ void* slaveWork(void* a) {
 		matrix = matrix_res;
 
 		if (pthread_mutex_lock(&mutex)) {
-			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
+		fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
 			exit(-1);
 		}
 
@@ -202,14 +208,26 @@ void* slaveWork(void* a) {
 			atualizaGoMaxD(maxD);
 
 			matrix_final = matrix_res;
+			if (go_alarm) printf("ALARME %ld\n", pthread_self());
+			errno = 0;
+			if (go_alarm && !(go_alarm = 0) && waitpid(-1, &estado, WNOHANG)) {
+				snprintf(env, 10, "%d", i);
 
-			if (go_alarm && !(go_alarm = 0) && waitpid(-1, NULL, WNOHANG)) {
+				perror(env);
 				idproc = fork();
 
 				if (idproc == -1) {
+				printf("ERRO\n");
 
 				} else if (idproc == 0) {
 					/*Filho*/
+					
+					memset(&structIGN, 0, sizeof(structIGN));
+					structIGN.sa_handler = SIG_IGN;
+					if (sigaction(SIGINT, &structIGN, NULL) != 0) {
+						printf("Erro: \n");
+					}
+					
 					escreverFicheiroTemporario();
 					exit(0);
 				} else {
@@ -252,6 +270,7 @@ int main (int argc, char** argv) {
 	args_t* slave_args; pthread_t* slaves;
 	struct sigaction structSIGALRM, structSIGINT;
 	FILE* filep;
+        printf("SOU O PAI %d\n" , getpid() );
 
 	if (argc != 11) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
@@ -291,7 +310,8 @@ int main (int argc, char** argv) {
 	filep = fopen(fichS,"r");
 	if (filep) {
 		matrix = readMatrix2dFromFile(filep, N+2, N+2);
-		dm2dPrint(matrix);
+		//dm2dPrint(matrix);
+                printf("printou\n");
 		fclose(filep);
 	} else {
 		matrix = dm2dNew(N+2, N+2);
@@ -313,7 +333,7 @@ int main (int argc, char** argv) {
 
 	/*Repetir na auxiliar*/
 	dm2dCopy(matrix_aux, matrix);
-
+	memset(&structSIGALRM, 0, sizeof(structSIGALRM));
 	structSIGALRM.sa_handler = &handlerSIGALRM;
 	if (sigaction(SIGALRM, &structSIGALRM, NULL) != 0) {
 		printf("Erro: \n");
@@ -341,6 +361,7 @@ int main (int argc, char** argv) {
 	        return -1;
 		}
 	}
+	printf("MAIN %ld\n", pthread_self());
 
 	/*Terminar threads*/
 	for (i = 0; i < trab; i++) {
@@ -355,7 +376,6 @@ int main (int argc, char** argv) {
 		fprintf(stderr, "\nErro: Falhou a apagar o ficheiro.\n");
 		return -1;
 	}
-	printf("OIsssOI\n" );
 	perror("FINAL");
 
 	/*Libertar e Imprimir*/
@@ -369,7 +389,8 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
-	dm2dPrint(matrix_final);
+	//dm2dPrint(matrix_final);
+	printf("printou\n");
 
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);

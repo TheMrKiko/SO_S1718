@@ -94,21 +94,19 @@ DoubleMatrix2D* simulFatia(DoubleMatrix2D* matrix, DoubleMatrix2D* matrix_aux, i
 
 void escreveFicheiroAuxiliar(){
 	FILE* apontoParaUmFile;
-	printf("SOU O %d A COMECAR A ESCREVER\n" , getpid() );
 	apontoParaUmFile = fopen(tempFichS,"w");
 	if (apontoParaUmFile == NULL) {
 		fprintf(stderr, "\nErro: Falha a criar o ficheiro.\n");
 		exit(-1);
 	}
-
+	
 	dm2dPrintToFile(matrix_final, apontoParaUmFile);
 	fclose(apontoParaUmFile);
-
+	
 	if (rename(tempFichS, fichS) != 0) {
 		fprintf(stderr, "\nErro: Falha a renomear ficheiro.\n");
 		exit(-1);
 	}
-	printf("SOU O %d A ACABAR DE ESCREVER\n", getpid() );
 }
 
 void handlerSIGALRM(int num) {
@@ -120,10 +118,8 @@ void handlerSIGINT(int num) {
 	int estado;
 	go_int = 0; alarm(0);
 	if (!waitpid(-1, &estado, WNOHANG)) {
-		printf("SOU O %d e ALGUEM JA ESTA A MEIO\n", getpid());
 		wait(&estado);
 	} else {
-		printf("SOU O %d e FAZENDO NOVA COPIA\n", getpid());
 		escreveFicheiroAuxiliar();
 	}
 	exit(0);
@@ -171,7 +167,7 @@ void* slaveWork(void* a) {
 	DoubleMatrix2D* matrix,* matrix_aux,* matrix_res;
 	args_t* args = (args_t*) a;
 	struct sigaction structIGN;
-
+	
 	/*Ler argumentos*/
 	myid = args->id;
 	n = args->colunas;
@@ -180,16 +176,16 @@ void* slaveWork(void* a) {
 	maxD = args->maxD;
 	matrix = args->matrix;
 	matrix_aux = args->matrix_aux;
-
+	
 	linha_ini = (klinhas * (myid-1)) + 1;
 	trabs = n/klinhas;
 	max_slave = 0;
-
+	
 	memset(&structIGN, 0, sizeof(structIGN));
 	structIGN.sa_handler = SIG_IGN;
-
+	
 	for (i = 0; i < iteracoes && go_maxD && go_int; i++) {
-
+		
 		/*Calcular matriz*/
 		matrix_res = simulFatia(matrix, matrix_aux, klinhas, n, linha_ini, maxD, &max_slave);
 		if (matrix_res == NULL) {
@@ -198,30 +194,28 @@ void* slaveWork(void* a) {
 		}
 		matrix_aux = matrix;
 		matrix = matrix_res;
-
+		
 		if (pthread_mutex_lock(&mutex) != 0) {
 			fprintf(stderr, "\nErro: Nao foi possivel obter o mutex.\n");
 			exit(-1);
 		}
-
+		
 		threads_on_wait++;
 		calcMaxMax(max_slave);
 		max_slave = 0;
-
+		
 		if (threads_on_wait == trabs) {
 			threads_on_wait = 0;
 			iteracao++;
 			atualizaGoMaxD(maxD);
 			matrix_final = matrix_res;
-			if (go_alarm) printf("ALARME %d\n", i);
 			if (go_alarm && !(go_alarm = 0) && waitpid(-1, &estado, WNOHANG)) {
 				idproc = fork();
-				printf("Eu %d Criei proc %d\n", getpid(), idproc);
-
+				
 				if (idproc == -1) {
 					fprintf(stderr, "\nErro: Nao foi possivel criar um processo filho.\n");
 					exit(-1);
-
+					
 				} else if (idproc == 0) {
 					/*Filho*/
 					if (sigaction(SIGINT, &structIGN, NULL) != 0) {
@@ -230,17 +224,17 @@ void* slaveWork(void* a) {
 					}
 					escreveFicheiroAuxiliar();
 					exit(0);
-
+					
 				} else {
 					/*Pai*/
 				}
 			}
-
+			
 			if (pthread_cond_broadcast(&barreira) != 0) {
 				fprintf(stderr, "\nErro: Falha a assinalar as condicoes.\n");
 				exit(-1);
 			}
-
+			
 		} else {
 			while (i >= iteracao) {
 				if (pthread_cond_wait(&barreira, &mutex) != 0) {
@@ -253,7 +247,7 @@ void* slaveWork(void* a) {
 			fprintf(stderr, "\nErro: Nao foi possivel libertar o mutex.\n");
 			exit(-1);
 		}
-
+		
 	}
 	return NULL;
 }
@@ -270,13 +264,13 @@ int main (int argc, char** argv) {
 	args_t* slave_args; pthread_t* slaves;
 	struct sigaction structSIGALRM, structSIGINT;
 	FILE* filep;
-
+	
 	if (argc != 11) {
 		fprintf(stderr, "\nNumero invalido de argumentos.\n");
 		fprintf(stderr, "Uso: heatSim N tEsq tSup tDir tInf iteracoes trabalhadoras maxD ficheiro periodo\n\n");
 		return 1;
 	}
-
+	
 	/* argv[0] = program name */
 	N = parse_integer_or_exit(argv[1], "N");
 	tEsq = parse_double_or_exit(argv[2], "tEsq");
@@ -288,23 +282,23 @@ int main (int argc, char** argv) {
 	maxD = parse_double_or_exit(argv[8], "diferenca_maxima");
 	fichS = argv[9];
 	periodoS = parse_integer_or_exit(argv[10], "periodo");
-
+	
 	/*Validar argumentos*/
 	if (N < 1 || tEsq < 0 || tSup < 0 || tDir < 0 || tInf < 0 || iteracoes < 1 || trab < 1 || N % trab != 0 || maxD < 0 || periodoS < 0 || strlen(fichS) == 0) {
 		fprintf(stderr, "\nErro: Argumentos invalidos.\n");
 		fprintf(stderr, "Uso: N >= 1, temperaturas >= 0,  trabalhadoras e iteracoes >= 1, diferenca maxima e periodo >= 0\n");
 		return 1;
 	}
-
+	
 	fprintf(stderr, "\nArgumentos:\n N=%d tEsq=%.1f tSup=%.1f tDir=%.1f tInf=%.1f iteracoes=%d trabalhadoras=%d maxD=%.2f ficheiro=%s periodo=%d\n", N, tEsq, tSup, tDir, tInf, iteracoes, trab, maxD, fichS, periodoS);
-	printf("SOU O PAI %d\n" , getpid() );
+	
 	/*Alocar memoria*/
 	slave_args = (args_t*) malloc(trab*sizeof(args_t));
 	slaves = (pthread_t*) malloc(trab*sizeof(pthread_t));
 	tempFichS = (char*) malloc((strlen(fichS)+2)*sizeof(char));
 	memset(&structSIGALRM, 0, sizeof(structSIGALRM));
 	memset(&structSIGINT, 0, sizeof(structSIGINT));
-
+	
 	strcpy(tempFichS, fichS);
 	strcat(tempFichS, "~");
 	structSIGALRM.sa_handler = &handlerSIGALRM;
@@ -313,50 +307,48 @@ int main (int argc, char** argv) {
 	sigaddset(&structSIGALRM.sa_mask, SIGINT);
 	sigemptyset(&structSIGINT.sa_mask);
 	sigaddset(&structSIGINT.sa_mask, SIGALRM);
-
+	
 	/*Testa se existe o ficheiro*/
 	filep = fopen(fichS,"r");
 	if (filep != NULL) {
-		printf("Existe\n");
 		matrix = readMatrix2dFromFile(filep, N+2, N+2);
-		printf("Li\n");
 		fclose(filep);
 	} else {
 		matrix = dm2dNew(N+2, N+2);
 	}
-
+	
 	/*Criar matriz aux*/
 	matrix_aux = dm2dNew(N+2, N+2);
-
+	
 	if (matrix == NULL || matrix_aux == NULL) {
 		fprintf(stderr, "\nErro: Nao foi possivel alocar memoria para as matrizes.\n\n");
 		return -1;
 	}
-
+	
 	/*Inicializar matriz*/
 	dm2dSetLineTo(matrix, 0, tSup);
 	dm2dSetLineTo(matrix, N+1, tInf);
 	dm2dSetColumnTo(matrix, 0, tEsq);
 	dm2dSetColumnTo(matrix, N+1, tDir);
-
+	
 	/*Repetir na auxiliar*/
 	dm2dCopy(matrix_aux, matrix);
-
+	
 	/*Rotinas de tratamento de interrupcoes*/
 	if (sigaction(SIGALRM, &structSIGALRM, NULL) != 0) {
 		fprintf(stderr, "\nErro: Nao foi possivel atribuir a rotina de tratamento.\n");
 		return -1;
 	}
-
+	
 	if (sigaction(SIGINT, &structSIGINT, NULL) != 0) {
 		fprintf(stderr, "\nErro: Nao foi possivel atribuir a rotina de tratamento.\n");
 		return -1;
 	}
-
+	
 	/*Criar slaves*/
 	klinhas = N/trab;
 	periodo = periodoS;
-
+	
 	for (i = 0; i < trab; i++) {
 		slave_args[i].id = i+1;
 		slave_args[i].colunas = N;
@@ -370,9 +362,9 @@ int main (int argc, char** argv) {
 			return -1;
 		}
 	}
-
+	
 	alarm(periodo);
-
+	
 	/*Terminar threads*/
 	for (i = 0; i < trab; i++) {
 		if (pthread_join(slaves[i], NULL) != 0) {
@@ -382,29 +374,28 @@ int main (int argc, char** argv) {
 	}
 	/*Imprimir e apagar ficheiro*/
 	dm2dPrint(matrix_final);
-
+	
 	if ((filep = fopen(fichS,"r")) && !fclose(filep) && unlink(fichS) != 0) {
 		fprintf(stderr, "\nErro: Falhou a apagar o ficheiro.\n");
 		return -1;
 	}
-	printf("FILE APAGADO\n");
-
+	
 	/*Libertar*/
 	if (pthread_mutex_destroy(&mutex) != 0) {
 		fprintf(stderr, "\nErro: Falhou a destruir mutex.\n");
 		return -1;
 	}
-
+	
 	if (pthread_cond_destroy(&barreira) != 0) {
 		fprintf(stderr, "\nErro: Falhou a destruir variavel de condicao.\n");
 		return -1;
 	}
-
+	
 	dm2dFree(matrix);
 	dm2dFree(matrix_aux);
 	free(tempFichS);
 	free(slave_args);
 	free(slaves);
-
+	
 	return 0;
 }

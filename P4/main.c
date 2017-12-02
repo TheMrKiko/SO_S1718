@@ -303,10 +303,16 @@ int main (int argc, char** argv) {
 	strcat(tempFichS, "~");
 	structSIGALRM.sa_handler = &handlerSIGALRM;
 	structSIGINT.sa_handler = &handlerSIGINT;
-	sigemptyset(&structSIGALRM.sa_mask);
-	sigaddset(&structSIGALRM.sa_mask, SIGINT);
-	sigemptyset(&structSIGINT.sa_mask);
-	sigaddset(&structSIGINT.sa_mask, SIGALRM);
+	
+	if (sigemptyset(&structSIGALRM.sa_mask) != 0 || sigaddset(&structSIGALRM.sa_mask, SIGINT) != 0) {
+		fprintf(stderr, "\nErro: Nao foi possivel configurar a rotina de tratamento.\n");
+		return -1;
+	}
+		
+	if (sigemptyset(&structSIGINT.sa_mask) != 0 || sigaddset(&structSIGINT.sa_mask, SIGALRM) != 0) {
+		fprintf(stderr, "\nErro: Nao foi possivel configurar a rotina de tratamento.\n");
+		return -1;
+	}
 	
 	/*Testa se existe o ficheiro*/
 	filep = fopen(fichS,"r");

@@ -21,12 +21,12 @@ clean: clean_o
 	rm -f heatSim
 
 zip:
-	zip G30_entrega3_SO.zip main.c matrix2d.c matrix2d.h Makefile
+	zip G30_entrega4_SO.zip main.c matrix2d.c matrix2d.h Makefile
 
 run: heatSim
 	@echo
 	@echo "Running"
-	./heatSim 5 10.0 10.0 0.0 0.0 20 5 0.01 teste_temp.txt 5
+	./heatSim 1000 10.0 10.0 0.0 0.0 2000 5 0 teste_temp.txt 1
 
 leak:	heatSim
-	valgrind --tool=memcheck --leak-check=yes ./heatSim 5 10.0 10.0 0.0 0.0 100 5 1
+	valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all ./heatSim 1000 10.0 10.0 0.0 0.0 2000 5 0 teste_temp.txt 1
